@@ -1,0 +1,107 @@
+
+/* FEEDS LIST */
+.data_wrap {
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 10px 15px;
+    width: 98%;
+    margin: 0 auto;
+    margin-bottom: 10px;
+}
+.data_line {
+    margin-bottom: 20px;
+}
+.data_photo {
+    
+}
+    .data_photo img {
+          border: 1px solid #ccc;
+          border-radius:5px;
+          padding: 5px;
+    }
+    .data_photo li strong {
+        display: block;
+        min-width: 100px;
+        float: left;
+    }
+.data_raw {
+    margin-top: 10px;
+}
+    .data_raw .hide {
+        width: 98%;
+        float: right;
+    }
+.data_error {
+    font-weight: bold;
+    color: red;
+}
+
+/* POPULAR PAGE */
+.photo {
+	margin: 30px;
+	position: relative;
+	width: 180px;
+	height: 140px;
+	float: left;
+}
+.photo .caption {
+    height: 30px;
+    overflow: auto;
+    font-size: 11px;
+    padding: 5px;
+}
+.photo img {
+	background: #fff;
+	border: solid 1px #ccc;
+	padding: 4px;
+}
+.photo a {
+	text-decoration: none;
+        font-size: 12px;
+}
+#auto_refresh_info {
+    color: #999;
+    font-size: 11px;
+}
+
+/* DETAILS PAGE */
+#info {
+  float: left; 
+  width: 300px;
+  padding-right: 20px;
+}
+    #info table td {
+        padding: 3px;
+    }
+#image {
+  float: left; 
+  padding-right: 20px;
+}    
+    #image img {
+      border: 1px solid #ccc;
+      border-radius:5px;
+      padding: 5px;
+    }    
+#comments {
+  clear: both;
+}
+.item {
+  float:none;
+  clear:both;
+  margin-top:1em;  
+}
+.profile {
+  float:left;
+  margin-right:1em; 
+  padding-bottom: 10px;
+  height: 48px;
+  width: 48px;
+}
+
+
+#google_map {
+    width: 400px;
+    height: 200px;
+    border: 1px #ccc solid;
+    border-radius: 3px;
+}

@@ -16,7 +16,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-// require_once 'Zend/Http/Client.php';
+
+require_once 'config.php';
 require_once 'CurlHttpClient.php';
 
 class Instagram {
@@ -32,7 +33,7 @@ class Instagram {
      * @var string
      */
     protected $_endpointUrls = array(
-        'authorize' => 'https://api.instagram.com/oauth/authorize/?client_id=%s&redirect_uri=%s&response_type=%s',
+        'authorize' => 'https://api.instagram.com/oauth/authorize/?client_id=%s&redirect_uri=%s&&scope=%s&response_type=%s',
         'access_token' => 'https://api.instagram.com/oauth/access_token',
         'user' => 'https://api.instagram.com/v1/users/%s/?access_token=%s',
         'user_feed' => 'https://api.instagram.com/v1/users/self/feed?%s',
@@ -44,15 +45,15 @@ class Instagram {
         'user_relationship' => 'https://api.instagram.com/v1/users/%d/relationship?access_token=%s',
         'user_liked' => 'https://api.instagram.com/v1/users/self/media/liked?access_token=%s',
         'modify_user_relationship' => 'https://api.instagram.com/v1/users/%d/relationship?action=%s&access_token=%s',
-        'media' => 'https://api.instagram.com/v1/media/%d?access_token=%s',
-        'media_search' => 'https://api.instagram.com/v1/media/search?lat=%s&lng=%s&max_timestamp=%s&min_timestamp=%s&distance=%s&access_token=%s',
+        'media' => 'https://api.instagram.com/v1/media/%s?access_token=%s',
+        'media_search' => 'https://api.instagram.com/v1/media/search?lat=%s&lng=%s&max_timestamp=%s&min_timestamp=%s&distance=%s&count=%d&access_token=%s',
         'media_popular' => 'https://api.instagram.com/v1/media/popular?access_token=%s',
         'media_comments' => 'https://api.instagram.com/v1/media/%d/comments?access_token=%s',
-        'post_media_comment' => 'https://api.instagram.com/v1/media/%d/comments?access_token=%s',
-        'delete_media_comment' => 'https://api.instagram.com/v1/media/%d/comments?comment_id=%d&access_token=%s',
+        'post_media_comment' => 'https://api.instagram.com/v1/media/%s/comments?access_token=%s',
+        'delete_media_comment' => 'https://api.instagram.com/v1/media/%s/comments?comment_id=%d&access_token=%s',
         'likes' => 'https://api.instagram.com/v1/media/%d/likes?access_token=%s',
-        'post_like' => 'https://api.instagram.com/v1/media/%d/likes',
-        'remove_like' => 'https://api.instagram.com/v1/media/%d/likes?access_token=%s',
+        'post_like' => 'https://api.instagram.com/v1/media/%s/likes',
+        'remove_like' => 'https://api.instagram.com/v1/media/%s/likes?access_token=%s',
         'tags' => 'https://api.instagram.com/v1/tags/%s?access_token=%s',
         'tags_recent' => 'https://api.instagram.com/v1/tags/%s/media/recent?max_id=%s&min_id=%s&access_token=%s',
         'tags_search' => 'https://api.instagram.com/v1/tags/search?q=%s&access_token=%s',
@@ -84,6 +85,12 @@ class Instagram {
      * @var string
      */
     protected $_accessToken = null;
+    
+    /**
+     * Access code
+     * @var string
+     */
+    protected $_accessCode = null;
 
     /**
      * OAuth user object
@@ -101,12 +108,18 @@ class Instagram {
      * Constructor needs to receive the config as an array
      * @param mixed $config
      */
-    public function __construct($config = null, $arrayResponses = false) {
+    public function __construct($config, $arrayResponses = false) {
+        
         $this->_config = $config;
         $this->_arrayResponses = $arrayResponses;
-        if (empty($config)) {
+        
+        if (empty($config))
             throw new InstagramException('Configuration params are empty or not an array.');
-        }
+        
+        // load tokens from session
+        $this->_oauthToken = $this->getOAuthToken();
+        $this->_accessToken = $this->getAccessToken();
+        
     }
 
     /**
@@ -136,7 +149,9 @@ class Instagram {
      * @return string. The JSON encoded OAuth token
      */
     protected function _setOauthToken() {
+        
         $this->_initHttpClient($this->_endpointUrls['access_token'], CurlHttpClient::POST);
+        
         $this->_httpClient->setPostParam('client_id', $this->_config['client_id']);
         $this->_httpClient->setPostParam('client_secret', $this->_config['client_secret']);
         $this->_httpClient->setPostParam('grant_type', $this->_config['grant_type']);
@@ -144,42 +159,111 @@ class Instagram {
         $this->_httpClient->setPostParam('code', $this->getAccessCode());
 
         $this->_oauthToken = $this->_getHttpClientResponse();
+
+        // save tokens to sesion
+        if (!isset(json_decode($this->_oauthToken)->error_type)) {
+            $this->setSession('InstagramOAuthToken', $this->_oauthToken);
+            $this->setAccessToken(json_decode($this->_oauthToken)->access_token);
+        }
+        
+    }
+
+    
+    public function debug() {
+        
+        // trace origin method
+        $trace = debug_backtrace();
+        
+        if (isset($trace[1])) {
+           //var_dump($trace);
+           $class = $trace[1]['class'];
+           $func = $trace[1]['function'];
+           $line = $trace[0]['line'];
+           echo '<h3 style="padding: 10px;background-color: #e1e1e1;border-radius: 5px;border: 1px solid #ccc;">'.$class.' => '.$func.', line: '.$line.'</h3>';
+       }
+        
+        
+        echo '<div style="padding: 10px;border: 1px solid #ccc;border-radius: 5px;">';
+        echo '<strong>SESSION:</strong><pre>';
+        print_r($_SESSION);
+        echo '</pre>';
+        
+        echo '<strong>GET:</strong><pre>';
+        print_r($_GET);
+        echo '</pre>';
+        
+        echo '<strong>access token:</strong>';
+        var_dump($this->_accessToken);
+        
+        echo '<strong>oauth token:</strong>';
+        var_dump($this->_oauthToken);
+        echo '</div>';
+        
+        exit;
+        
     }
 
     /**
-     * Return the decoded plain access token value
-     * from the OAuth JSON encoded token.
+     * Redirect to url
+     * @param $url
+     */
+    public function redirect( $url ) {
+        header('Location: '.$url);
+        exit;
+    }        
+    
+    /**
+     * Check if any user is logged on
+     * @return string
+     */
+    public function isLogged() {
+        return (!$this->_accessToken || !$this->_oauthToken)? false : true;
+    }    
+    
+    /**
+     * Return access token from class or from session
      * @return string
      */
     public function getAccessToken() {
-        if ($this->_accessToken == null) {
-
-            if ($this->_oauthToken == null) {
-                $this->_setOauthToken();
-            }
-
-            $this->_accessToken = json_decode($this->_oauthToken)->access_token;
-        }
-
-        return $this->_accessToken;
+        return ($this->_accessToken)? $this->_accessToken : $this->getSession('InstagramAccessToken');
     }
+    
+    /**
+     * Recover oauth token from class or from session
+     * @return object
+     */
+    public function getOAuthToken() {
+        return ($this->_oauthToken)? $this->_oauthToken : $this->getSession('InstagramOAuthToken');
+    }
+    
+    
+    ////////// SESION ACTIONS ///////////////
+    /**
+     * Save param to session
+     */
+    public function setSession($key,$value) {
+        
+        if(!isset($_SESSION)) @session_start();
+        $_SESSION[ $key ] = $value;
+        
+    }
+    
+    /**
+     * Get param from session
+     */
+    public function getSession($key) {
+        return (isset($_SESSION) && isset($_SESSION[ $key ])) ? $_SESSION[ $key ] : NULL;
+    }        
+    
+    ////////// SESION ACTIONS ///////////////
 
     /**
-     * Return the decoded user object
+     * Return the decoded user object - from class or from session
      * from the OAuth JSON encoded token
      * @return object
      */
     public function getCurrentUser() {
-        if ($this->_currentUser == null) {
-
-            if ($this->_oauthToken == null) {
-                $this->_setOauthToken();
-            }
-
-            $this->_currentUser = json_decode($this->_oauthToken)->user;
-        }
-
-        return $this->_currentUser;
+        return ($this->_currentUser)? $this->_currentUser : json_decode($this->_oauthToken)->user;
     }
 
     /**
@@ -189,12 +273,45 @@ class Instagram {
         return $_GET[self::RESPONSE_CODE_PARAM];
     }
 
+    
+    /**
+     * Log IN current user
+     * @return string $this->_accessToken
+     */
+    public function logIn() {
+        
+        if (!$this->isLogged())
+            $this->_setOauthToken();
+        
+    }    
+    
+    /**
+     * Log OUT current user
+     */
+    public function logOut( $url = '' ) {
+        
+        $this->setSession('InstagramOAuthToken', null);
+        $this->setSession('InstagramAccessToken', null);
+        $this->setSession('InstagramData', null);
+        
+        session_unset();
+        session_destroy();
+        
+        if ($url) {
+            header('Location: '.$url);
+            exit;                
+        }
+        
+    }    
+    
     /**
      * Sets the access token response from OAuth
      * @param string $accessToken
      */
     public function setAccessToken($accessToken) {
         $this->_accessToken = $accessToken;
+        // save access token to session
+        $this->setSession('InstagramAccessToken', $accessToken);
     }
 
     /**
@@ -217,6 +334,7 @@ class Instagram {
         return sprintf($this->_endpointUrls['authorize'],
             $this->_config['client_id'],
             $this->_config['redirect_uri'],
+            implode( '+', $this->_config['scope']),
             self::RESPONSE_CODE_PARAM);
     }
 
@@ -225,15 +343,15 @@ class Instagram {
       * @param $params array
       */
 	public function createSubscription($params) {
-        $this->_initHttpClient($this->_endpointUrls['create_subscriptions'], CurlHttpClient::POST);
-        $this->_httpClient->setPostParam('client_id', $this->_config['client_id']);
-        $this->_httpClient->setPostParam('client_secret', $this->_config['client_secret']);
-        $this->_httpClient->setPostParam('verify_token', $this->_config['verify_token']);
-        $this->_httpClient->setPostParam('callback_url', $params['callback_url']);
-        $this->_httpClient->setPostParam('object', $params['object']);
-		$this->_httpClient->setPostParam('object_id', $params['object_id']);
-        $this->_httpClient->setPostParam('aspect', $params['aspect']);
-        return $this->_getHttpClientResponse();
+            $this->_initHttpClient($this->_endpointUrls['create_subscriptions'], CurlHttpClient::POST);
+            $this->_httpClient->setPostParam('client_id', $this->_config['client_id']);
+            $this->_httpClient->setPostParam('client_secret', $this->_config['client_secret']);
+            $this->_httpClient->setPostParam('verify_token', $this->_config['verify_token']);
+            $this->_httpClient->setPostParam('callback_url', $params['callback_url']);
+            $this->_httpClient->setPostParam('object', $params['object']);
+                    $this->_httpClient->setPostParam('object_id', $params['object_id']);
+            $this->_httpClient->setPostParam('aspect', $params['aspect']);
+            return $this->_getHttpClientResponse();
 	}
 	
     /**
@@ -241,33 +359,33 @@ class Instagram {
       * @param $id
       */
 	public function listSubscriptions() {
-		$getParams = array(
-			'client_id' => $this->_config['client_id'],
-			'client_secret' => $this->_config['client_secret']
-		);
-		$uri = sprintf($this->_endpointUrls['manage_subscriptions'], http_build_query($getParams));
-		$this->_initHttpClient($uri, CurlHttpClient::GET);
-		return $this->_getHttpClientResponse();
+            $getParams = array(
+                'client_id' => $this->_config['client_id'],
+                'client_secret' => $this->_config['client_secret']
+            );
+            $uri = sprintf($this->_endpointUrls['manage_subscriptions'], http_build_query($getParams));
+            $this->_initHttpClient($uri, CurlHttpClient::GET);
+            return $this->_getHttpClientResponse();
 	}
 	
-    /**
+      /**
       * Delete Subscription by id or type.
-	  *  id=1 || object=all|tag|user
+      *  id=1 || object=all|tag|user
       * @param $params array
       */
 	public function deleteSubscription($params) {
-		$getParams = array(
-			'client_id' => $this->_config['client_id'],
-			'client_secret' => $this->_config['client_secret']
-		);
-		if(isset($params['id'])) {
-			$getParams['id'] = $params['id'];
-		} else {
-			$getParams['object'] = $params['object'];
-		}		
-		$uri = sprintf($this->_endpointUrls['manage_subscriptions'], http_build_query($getParams));
-		$this->_initHttpClient($uri, CurlHttpClient::DELETE);
-		return $this->_getHttpClientResponse();
+            $getParams = array(
+                    'client_id' => $this->_config['client_id'],
+                    'client_secret' => $this->_config['client_secret']
+            );
+            if(isset($params['id'])) {
+                    $getParams['id'] = $params['id'];
+            } else {
+                    $getParams['object'] = $params['object'];
+            }		
+            $uri = sprintf($this->_endpointUrls['manage_subscriptions'], http_build_query($getParams));
+            $this->_initHttpClient($uri, CurlHttpClient::DELETE);
+            return $this->_getHttpClientResponse();
 	}
 
     /**
@@ -290,6 +408,92 @@ class Instagram {
         $this->_initHttpClient($endpointUrl);
         return $this->_getHttpClientResponse();
     }
+    
+    /**
+     * See the authenticated user's feeds - ALL FEEDS
+     * @param $uid user id (or take currently logged)
+     * @param $sort by date or popularity (likes)
+     * @return $array $data
+     */
+    public function getUserFeeds( $uid = '', $sort = 'date' ) {
+
+        /////////////////////////////////////////////////
+        // 1. GET USER INFO
+        
+        // 1.1 get user id
+        if (!$uid) $uid = $this->getCurrentUser()->id;
+           
+        // 1.2 get user full info
+        $user = json_decode( $this->getUser( $uid ) )->data;
+        $count_total = $user->counts->media;
+
+        /////////////////////////////////////////////////
+        // 2. GET ALL USER MEDIA
+
+        // 2.1 trying to fetch all media at once
+        $data = json_decode($this->getUserFeed('','',$count_total), true);
+        $count_data = count($data['data']);
+
+        // check for errors
+        if (isset($data['meta']['error_type']))
+            throw new InstagramException('Cannot fetch all user media. Error: ['.$data['meta']['error_message'].']');
+        
+        // save first part
+        $this->setSession('InstagramData', $data['data']);
+
+         // 2.2 results are limited - fetch step by step
+        if ($count_data != $count_total) {
+
+            // get needed iteration count - minus first data request
+            $count_parts = floor($count_total / $count_data);
+
+            for ($i = 1; $i <= $count_parts; $i++) {
+
+                // get each data - by next_max_id
+                $next_max_id = ($i == 1)? $data['pagination']['next_max_id'] : $data2['pagination']['next_max_id'];
+                $data2 = json_decode($this->getUserFeed($next_max_id,'',$count_data), true);
+                
+                // check for errors
+                if (isset($data2['meta']['error_type']))
+                    throw new InstagramException('Cannot fetch all user media. Error: ['.$data['meta']['error_message'].']');
+
+                // save other parts
+                $session = $this->getSession('InstagramData');
+                $this->setSession('InstagramData', array_merge( $session, $data2['data'] ));
+
+            }
+
+        }
+        
+        $data = $this->getSession('InstagramData');
+        
+        /////////////////////////////////////////////////
+        // 2. OPTIONAL SORTING (BY LIKES)
+
+        if ($sort != 'date') {
+            
+            $ids = array();
+            $temp = array();
+            $sorted = array();
+            
+            foreach ($data as $media) {
+                $temp [ $media['id'] ] = $media;
+                $ids[ $media['id'] ] = $media['likes']['count'];
+            }
+            
+            arsort($ids);
+            
+            foreach ($ids as $id => $sort) {
+                $sorted[] = $temp[ $id ];
+            }
+            
+            return $sorted;
+            
+        }
+
+        return $data;
+        
+    }    
 	
     /**
      * Get information about the current user's relationship (follow/following/etc) to another user.
@@ -397,8 +601,8 @@ class Instagram {
      * @param integer $minTimestamp
      * @param integer $distance
      */
-    public function mediaSearch($lat, $lng, $maxTimestamp = '', $minTimestamp = '', $distance = '') {
-        $endpointUrl = sprintf($this->_endpointUrls['media_search'], $lat, $lng, $maxTimestamp, $minTimestamp, $distance, $this->getAccessToken());
+    public function mediaSearch($lat, $lng, $maxTimestamp = '', $minTimestamp = '', $distance = '', $count = 40) {
+        $endpointUrl = sprintf($this->_endpointUrls['media_search'], $lat, $lng, $maxTimestamp, $minTimestamp, $distance, $count, $this->getAccessToken());
         $this->_initHttpClient($endpointUrl);
         return $this->_getHttpClientResponse();
     }
@@ -407,6 +611,7 @@ class Instagram {
      * Get a list of what media is most popular at the moment.
      */
     public function getPopularMedia() {
+        
         $endpointUrl = sprintf($this->_endpointUrls['media_popular'], $this->getAccessToken());
         $this->_initHttpClient($endpointUrl);
         return $this->_getHttpClientResponse();
@@ -428,9 +633,9 @@ class Instagram {
      * @param string $text
      */
     public function postMediaComment($id, $text) {
-        $this->_init();
-        $endpointUrl = sprintf($this->_endpointUrls['post_media_comment'], $id, $text, $this->getAccessToken());
+        $endpointUrl = sprintf($this->_endpointUrls['post_media_comment'], $id, $this->getAccessToken());
         $this->_initHttpClient($endpointUrl, CurlHttpClient::POST);
+        $this->_httpClient->setPostParam('text', $text);
         return $this->_getHttpClientResponse();
     }
 
